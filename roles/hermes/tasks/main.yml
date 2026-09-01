@@ -1,0 +1,6 @@
+---
+# tasks file for b08x.llmops.hermes
+
+- name: Display the value of hermes_my_variable
+  ansible.builtin.debug:
+    msg: "The value of hermes_my_variable is {{ hermes_my_variable }}"

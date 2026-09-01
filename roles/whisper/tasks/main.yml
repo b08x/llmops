@@ -1,0 +1,6 @@
+---
+# tasks file for b08x.llmops.whisper
+
+- name: Display the value of whisper_my_variable
+  ansible.builtin.debug:
+    msg: "The value of whisper_my_variable is {{ whisper_my_variable }}"

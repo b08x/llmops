@@ -1,0 +1,6 @@
+---
+# tasks file for b08x.llmops.vibe
+
+- name: Display the value of vibe_my_variable
+  ansible.builtin.debug:
+    msg: "The value of vibe_my_variable is {{ vibe_my_variable }}"

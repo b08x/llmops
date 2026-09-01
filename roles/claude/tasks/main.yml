@@ -1,0 +1,6 @@
+---
+# tasks file for b08x.llmops.claude
+
+- name: Display the value of claude_my_variable
+  ansible.builtin.debug:
+    msg: "The value of claude_my_variable is {{ claude_my_variable }}"
