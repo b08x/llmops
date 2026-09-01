@@ -1,0 +1,6 @@
+---
+# tasks file for b08x.llmops.opencode
+
+- name: Display the value of opencode_my_variable
+  ansible.builtin.debug:
+    msg: "The value of opencode_my_variable is {{ opencode_my_variable }}"
