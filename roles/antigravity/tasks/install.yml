@@ -1,0 +1,88 @@
+---
+# install tasks for antigravity tools
+
+- name: Ensure destination directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ user.name }}"
+    group: "{{ user.name }}"
+    mode: "0755"
+  become: true
+  loop:
+    - /opt/antigravity
+    - /opt/antigravity-ide
+
+- name: Download Antigravity package
+  ansible.builtin.get_url:
+    url: "{{ antigravity_hub_url }}"
+    dest: /tmp/Antigravity.tar.gz
+    mode: "0644"
+
+- name: Extract Antigravity package
+  ansible.builtin.unarchive:
+    src: /tmp/Antigravity.tar.gz
+    dest: /opt/antigravity
+    remote_src: true
+    owner: "{{ user.name }}"
+    group: "{{ user.name }}"
+    creates: /opt/antigravity/Antigravity
+  become: true
+
+- name: Download Antigravity CLI install script
+  ansible.builtin.get_url:
+    url: "{{ antigravity_cli_install_url }}"
+    dest: /tmp/agy_install.sh
+    mode: "0755"
+    validate_certs: false
+
+- name: Install Antigravity CLI
+  ansible.builtin.command: bash /tmp/agy_install.sh
+  args:
+    creates: "{{ user.home }}/.local/bin/agy"
+  become: true
+  become_user: "{{ user.name }}"
+
+- name: Download Antigravity IDE package
+  ansible.builtin.get_url:
+    url: "{{ antigravity_ide_url }}"
+    dest: "/tmp/Antigravity_IDE.tar.gz"
+    mode: "0644"
+
+- name: Extract Antigravity IDE package
+  ansible.builtin.unarchive:
+    src: "/tmp/Antigravity_IDE.tar.gz"
+    dest: /opt/antigravity-ide
+    remote_src: true
+    owner: "{{ user.name }}"
+    group: "{{ user.name }}"
+    extra_opts:
+      - --strip-components=1
+    creates: "/opt/antigravity-ide/antigravity-ide"
+  become: true
+
+- name: Create desktop file for Antigravity IDE
+  ansible.builtin.copy:
+    dest: /usr/share/applications/antigravity-ide.desktop
+    content: |
+      [Desktop Entry]
+      Name=Antigravity IDE
+      Exec=/opt/antigravity-ide/antigravity-ide %F
+      Icon=/opt/antigravity-ide/resources/app/resources/linux/code.png
+      Type=Application
+      Categories=Development;IDE;
+    mode: "0644"
+  become: true
+
+- name: Create desktop file for Antigravity
+  ansible.builtin.copy:
+    dest: /usr/share/applications/antigravity.desktop
+    content: |
+      [Desktop Entry]
+      Name=Antigravity
+      Exec=/opt/antigravity/Antigravity-x64/antigravity
+      Icon=/opt/antigravity-ide/resources/app/resources/linux/code.png
+      Type=Application
+      Categories=Development;IDE;
+    mode: "0644"
+  become: true
