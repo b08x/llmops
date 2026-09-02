@@ -5,8 +5,8 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    owner: "{{ user.name }}"
-    group: "{{ user.name }}"
+    owner: "{{ ansible_user_id }}"
+    group: "{{ ansible_user_id }}"
     mode: "0755"
   become: true
   loop:
@@ -24,8 +24,8 @@
     src: /tmp/Antigravity.tar.gz
     dest: /opt/antigravity
     remote_src: true
-    owner: "{{ user.name }}"
-    group: "{{ user.name }}"
+    owner: "{{ ansible_user_id }}"
+    group: "{{ ansible_user_id }}"
     creates: /opt/antigravity/Antigravity
   become: true
 
@@ -39,9 +39,9 @@
 - name: Install Antigravity CLI
   ansible.builtin.command: bash /tmp/agy_install.sh
   args:
-    creates: "{{ user.home }}/.local/bin/agy"
+    creates: "{{ ansible_user_dir }}/.local/bin/agy"
   become: true
-  become_user: "{{ user.name }}"
+  become_user: "{{ ansible_user_id }}"
 
 - name: Download Antigravity IDE package
   ansible.builtin.get_url:
@@ -54,8 +54,8 @@
     src: "/tmp/Antigravity_IDE.tar.gz"
     dest: /opt/antigravity-ide
     remote_src: true
-    owner: "{{ user.name }}"
-    group: "{{ user.name }}"
+    owner: "{{ ansible_user_id }}"
+    group: "{{ ansible_user_id }}"
     extra_opts:
       - --strip-components=1
     creates: "/opt/antigravity-ide/antigravity-ide"

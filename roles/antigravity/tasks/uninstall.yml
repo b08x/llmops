@@ -9,11 +9,11 @@
   loop:
     - /opt/antigravity
     - /opt/antigravity-ide
-    - "{{ user.home }}/.gemini/antigravity-cli"
+    - "{{ ansible_user_dir }}/.gemini/antigravity-cli"
 
 - name: Remove Antigravity CLI binaries
   ansible.builtin.file:
-    path: "{{ user.home }}/.local/bin/agy"
+    path: "{{ ansible_user_dir }}/.local/bin/agy"
     state: absent
 
 - name: Remove desktop files
