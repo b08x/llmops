@@ -1,8 +1,0 @@
----
-# update tasks for antigravity tools
-
-- name: Include uninstall tasks to clean up previous versions
-  ansible.builtin.include_tasks: uninstall.yml
-
-- name: Include install tasks to install latest versions
-  ansible.builtin.include_tasks: install.yml
