@@ -1,0 +1,12 @@
+---
+# handlers file for b08x.llmops.langfuse
+
+- name: Restart Langfuse stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ langfuse_deploy_dir }}"
+    project_name: "{{ langfuse_project_name }}"
+    env_files:
+      - ".env"
+    state: present
+    pull: always
+    recreate: always

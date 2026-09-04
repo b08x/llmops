@@ -1,0 +1,32 @@
+---
+# tasks file for b08x.llmops.langfuse
+
+- name: Create Langfuse deployment directory
+  ansible.builtin.file:
+    path: "{{ langfuse_deploy_dir }}"
+    state: directory
+    mode: "0755"
+  tags: ["langfuse", "config"]
+
+- name: Deploy environment file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ langfuse_env_file }}"
+    mode: "0600"
+  notify: Restart Langfuse stack
+  tags: ["langfuse", "config"]
+
+- name: Deploy Langfuse via Docker Compose
+  ansible.builtin.include_tasks: docker.yml
+  when: langfuse_container_runtime == "docker"
+  tags: ["langfuse", "docker"]
+
+- name: Deploy Langfuse via Podman
+  ansible.builtin.include_tasks: podman.yml
+  when: langfuse_container_runtime == "podman"
+  tags: ["langfuse", "podman"]
+
+- name: Backup or restore Langfuse PostgreSQL database
+  ansible.builtin.include_tasks: backup.yml
+  when: langfuse_backup_action != "none"
+  tags: ["langfuse", "backup"]
