@@ -1,7 +1,0 @@
----
-# tasks file for b08x.llmops.antigravity
-# This role configures skills, static context, agent definitions, and observability.
-
-- name: Display the value of antigravity_my_variable
-  ansible.builtin.debug:
-    msg: "The value of antigravity_my_variable is {{ antigravity_my_variable }}"

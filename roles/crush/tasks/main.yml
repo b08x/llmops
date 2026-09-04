@@ -1,6 +1,0 @@
----
-# tasks file for b08x.llmops.crush
-
-- name: Display the value of crush_my_variable
-  ansible.builtin.debug:
-    msg: "The value of crush_my_variable is {{ crush_my_variable }}"
