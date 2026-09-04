@@ -243,6 +243,245 @@ minio              :9000  → S3-compatible object storage
                      :9001 → MinIO console
 ```
 
+## Usage Guide
+
+### 1. Generate Secrets
+
+Before deploying, generate the required secrets. Never use the defaults in
+production.
+
+```bash
+# NextAuth secret (JWT signing)
+openssl rand -hex 32
+
+# Encryption key (sensitive data at rest — must be exactly 64 hex chars)
+openssl rand -hex 32
+
+# Salt (API key hashing)
+openssl rand -hex 16
+```
+
+Store these in an Ansible Vault or your secrets manager:
+
+```yaml
+# group_vars/langfuse.yml (vault-encrypted)
+vault_langfuse_nextauth_secret: "abc123..."
+vault_langfuse_encryption_key: "def456..."
+vault_langfuse_salt: "ghi789..."
+vault_langfuse_postgres_password: "strong_pg_password"
+vault_langfuse_clickhouse_password: "strong_ch_password"
+vault_langfuse_redis_auth: "strong_redis_password"
+vault_langfuse_minio_root_password: "strong_minio_password"
+```
+
+### 2. Deploy with Docker Compose
+
+The default runtime. Requires Docker Engine with the Compose plugin and the
+`community.docker` Ansible collection.
+
+```yaml
+- name: Deploy Langfuse via Docker Compose
+  hosts: langfuse_hosts
+  become: false
+  roles:
+    - role: b08x.llmops.langfuse
+      vars:
+        langfuse_container_runtime: docker
+        langfuse_deploy_dir: "/opt/langfuse"
+        langfuse_nextauth_url: "http://langfuse.example.com:3000"
+        langfuse_nextauth_secret: "{{ vault_langfuse_nextauth_secret }}"
+        langfuse_encryption_key: "{{ vault_langfuse_encryption_key }}"
+        langfuse_salt: "{{ vault_langfuse_salt }}"
+        langfuse_postgres_password: "{{ vault_langfuse_postgres_password }}"
+        langfuse_clickhouse_password: "{{ vault_langfuse_clickhouse_password }}"
+        langfuse_redis_auth: "{{ vault_langfuse_redis_auth }}"
+        langfuse_minio_root_password: "{{ vault_langfuse_minio_root_password }}"
+```
+
+```bash
+ansible-playbook deploy-langfuse.yml
+```
+
+Docker Compose uses service hostnames for inter-container networking —
+postgres is reached at `postgres:5432`, clickhouse at `clickhouse:8123`, etc.
+This is handled by the compose template automatically.
+
+### 3. Deploy with Podman (Rootless)
+
+Rootless podman runs without `become: true`. Requires the `containers.podman`
+Ansible collection.
+
+```yaml
+- name: Deploy Langfuse via Podman
+  hosts: tinybot
+  become: false
+  gather_facts: true
+  vars:
+    langfuse_container_runtime: podman
+    langfuse_deploy_dir: "{{ user.home }}/LLMOS/langfuse"
+    langfuse_nextauth_url: "http://tinybot:3000"
+    langfuse_bind_localhost: false
+  roles:
+    - role: b08x.llmops.langfuse
+      tags: ["langfuse", "llmops"]
+```
+
+```bash
+ansible-playbook langfuse-podman-tinybot.yml
+```
+
+Podman uses a pod — all containers share the network namespace and
+communicate via `localhost`. The pod publishes ports on the host.
+
+**External access:** Set `langfuse_bind_localhost: false` to publish ports on
+`0.0.0.0` so Langfuse is reachable from other hosts via the hostname. With
+`true` (default), ports bind to `127.0.0.1` only — local access works,
+remote access is refused.
+
+### 4. Update Configuration
+
+Change a variable in the playbook and re-run. The behavior depends on the
+runtime:
+
+- **Docker:** The `.env` template change notifies the "Restart Langfuse stack"
+  handler, which runs `docker_compose_v2` with `recreate: always`. All
+  containers are recreated with the new environment.
+- **Podman:** The `podman_container` module detects env dict changes and
+  recreates the affected container automatically. No handler fires for
+  podman — the module's own idempotency check handles it.
+
+### 5. Backup the Database
+
+Run the role with `langfuse_backup_action: backup`. This executes `pg_dump`
+inside the postgres container — no host-side postgresql-client needed.
+
+```yaml
+- name: Backup Langfuse PostgreSQL
+  hosts: tinybot
+  become: false
+  roles:
+    - role: b08x.llmops.langfuse
+      vars:
+        langfuse_container_runtime: podman
+        langfuse_backup_action: backup
+```
+
+```bash
+ansible-playbook backup-langfuse.yml
+```
+
+Backups are written to `{{ langfuse_backup_dir }}` (default:
+`{{ langfuse_deploy_dir }}/backups`) with timestamped filenames:
+
+```
+postgres_20260904T143000.dump   (custom format, compressed)
+postgres_20260904T143000.sql   (plain SQL)
+```
+
+Old backups beyond `langfuse_backup_retention_days` (default: 7) are pruned
+automatically.
+
+### 6. Restore the Database
+
+Provide a backup file path and set the action to `restore`.
+
+```yaml
+- name: Restore Langfuse PostgreSQL
+  hosts: tinybot
+  become: false
+  roles:
+    - role: b08x.llmops.langfuse
+      vars:
+        langfuse_container_runtime: podman
+        langfuse_backup_action: restore
+        langfuse_backup_file: "/home/b08x/LLMOS/langfuse/backups/postgres_20260904T143000.dump"
+```
+
+```bash
+ansible-playbook restore-langfuse.yml
+```
+
+The role validates the file exists before attempting restore. Custom format
+(`.dump`) uses `pg_restore --clean --if-exists`; plain SQL (`.sql`) is piped
+through `psql`.
+
+### 7. Tear Down
+
+To remove the entire stack:
+
+```bash
+# Podman
+podman pod stop langfuse && podman pod rm langfuse
+podman volume rm langfuse_postgres_data langfuse_clickhouse_data \
+  langfuse_clickhouse_logs langfuse_minio_data langfuse_redis_data
+
+# Docker
+docker compose -f /opt/langfuse/docker-compose.yml down -v
+```
+
+Named volumes persist independently. Removing containers does not destroy
+data unless volumes are explicitly removed.
+
+## Troubleshooting
+
+### Container can't reach postgres at localhost:5432 (Podman)
+
+If containers are individually recreated (e.g. by env var changes), rootless
+podman with netavark may assign them to different network namespaces despite
+being in the same pod. Symptoms:
+
+```
+Error: P1001: Can't reach database server at `localhost:5432`
+```
+
+Verify all containers share the same network namespace:
+
+```bash
+for c in langfuse-postgres langfuse-clickhouse langfuse-redis langfuse-minio \
+         langfuse-worker langfuse-web; do
+  pid=$(podman inspect "$c" --format '{{.State.Pid}}')
+  echo "$c: $(ls -l /proc/$pid/ns/net | awk -F'->' '{print $2}')"
+done
+```
+
+If namespaces differ, recreate the entire pod atomically:
+
+```bash
+podman pod stop langfuse && podman pod rm langfuse
+ansible-playbook langfuse-podman-tinybot.yml
+```
+
+### `http://hostname:3000` connection refused
+
+`langfuse_bind_localhost: true` (default) binds all ports to `127.0.0.1`. For
+external access, set `langfuse_bind_localhost: false` in the playbook. The
+Next.js startup banner showing `http://langfuse:3000` is cosmetic — it uses
+`os.hostname()`, not `NEXTAUTH_URL`.
+
+### Podman handler errors on env change
+
+If you see "Address already in use" or "container state improper" when
+re-running after changing env vars, this was a handler conflict that has
+been fixed. The handler now only fires for the Docker runtime. Podman relies
+on `podman_container`'s native env diff detection for recreation.
+
+### MinIO container exits with EOF quoting error
+
+This was caused by string-form `command` with nested quotes being split on
+whitespace by podman. The role now uses list-form `command` for MinIO. If
+you encounter this in a fork, ensure the command is a YAML list:
+
+```yaml
+command:
+  - "-c"
+  - "mkdir -p /data/langfuse && minio server --address ':9000' --console-address ':9001' /data"
+```
+
+### Podman containers fail with hostname error
+
+Setting `hostname:` on containers in a pod causes exit code 125 — pods own
+the UTS namespace. The role no longer sets `hostname:` on pod containers.
+
 ## License
 
 GPL-2.0-or-later
