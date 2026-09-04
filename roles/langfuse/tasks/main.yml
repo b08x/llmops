@@ -13,9 +13,7 @@
     src: env.j2
     dest: "{{ langfuse_env_file }}"
     mode: "0600"
-  notify:
-    - Restart Langfuse stack (Docker Compose)
-    - Restart Langfuse stack (Podman)
+  notify: Restart Langfuse stack
   tags: ["langfuse", "config"]
 
 - name: Deploy Langfuse via Docker Compose

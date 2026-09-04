@@ -1,7 +1,10 @@
 ---
 # handlers file for b08x.llmops.langfuse
 
-- name: Restart Langfuse stack (Docker Compose)
+# Podman containers are recreated automatically by podman_container when
+# the env dict changes — no handler needed for that runtime.
+
+- name: Restart Langfuse stack
   community.docker.docker_compose_v2:
     project_src: "{{ langfuse_deploy_dir }}"
     project_name: "{{ langfuse_project_name }}"
@@ -11,9 +14,3 @@
     pull: always
     recreate: always
   when: langfuse_container_runtime == "docker"
-
-- name: Restart Langfuse stack (Podman)
-  ansible.builtin.command:
-    cmd: "podman pod restart {{ langfuse_project_name }}"
-  when: langfuse_container_runtime == "podman"
-  changed_when: true
