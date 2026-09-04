@@ -6,7 +6,9 @@
     src: docker-compose.yml.j2
     dest: "{{ langfuse_compose_file }}"
     mode: "0644"
-  notify: Restart Langfuse stack
+  notify:
+    - Restart Langfuse stack (Docker Compose)
+    - Restart Langfuse stack (Podman)
   tags: ["langfuse", "config"]
 
 - name: Pull Langfuse container images

@@ -1,7 +1,7 @@
 ---
 # handlers file for b08x.llmops.langfuse
 
-- name: Restart Langfuse stack
+- name: Restart Langfuse stack (Docker Compose)
   community.docker.docker_compose_v2:
     project_src: "{{ langfuse_deploy_dir }}"
     project_name: "{{ langfuse_project_name }}"
@@ -10,3 +10,10 @@
     state: present
     pull: always
     recreate: always
+  when: langfuse_container_runtime == "docker"
+
+- name: Restart Langfuse stack (Podman)
+  ansible.builtin.command:
+    cmd: "podman pod restart {{ langfuse_project_name }}"
+  when: langfuse_container_runtime == "podman"
+  changed_when: true
