@@ -24,6 +24,19 @@ langfuse_minio_console_port: 9091
 # Whether to bind infrastructure ports to localhost only
 langfuse_bind_localhost: true
 
+# Firewall ports to open (empty list skips firewall management)
+# Only web, worker, and MinIO ports are exposed; infrastructure ports
+# (5432, 8123, 9000, 6379) stay localhost-bound even when bind_localhost is false
+langfuse_firewall_ports:
+  - "{{ langfuse_web_port }}/tcp"
+  - "{{ langfuse_worker_port }}/tcp"
+  - "{{ langfuse_minio_api_port }}/tcp"
+  - "{{ langfuse_minio_console_port }}/tcp"
+
+# Force podman container recreation (useful after image tag bumps or
+# when the shared pod network namespace needs full reset)
+langfuse_force_recreate: false
+
 # Telemetry and feature flags
 langfuse_telemetry_enabled: true
 langfuse_enable_experimental_features: false

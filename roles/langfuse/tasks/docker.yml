@@ -6,6 +6,7 @@
     src: docker-compose.yml.j2
     dest: "{{ langfuse_compose_file }}"
     mode: "0644"
+    backup: true
   notify: Restart Langfuse stack
   tags: ["langfuse", "config"]
 

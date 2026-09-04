@@ -50,6 +50,18 @@ argument_specs:
         type: bool
         description: Bind infrastructure ports to 127.0.0.1 only.
         default: true
+      langfuse_firewall_ports:
+        type: list
+        description: >-
+          Firewall ports to open via firewalld. Empty list skips firewall
+          management. Only applied when langfuse_bind_localhost is false.
+        default: "{{ langfuse_firewall_ports }}"
+      langfuse_force_recreate:
+        type: bool
+        description: >-
+          Force podman container recreation on every run. Useful after image
+          tag bumps or when the shared pod network namespace needs full reset.
+        default: false
       langfuse_telemetry_enabled:
         type: bool
         description: Enable Langfuse telemetry.
