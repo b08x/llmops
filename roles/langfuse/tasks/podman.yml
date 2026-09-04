@@ -50,8 +50,8 @@
       - "{% if langfuse_bind_localhost %}127.0.0.1:{% endif %}8123:8123"
       - "{% if langfuse_bind_localhost %}127.0.0.1:{% endif %}9000:9000"
       - "{% if langfuse_bind_localhost %}127.0.0.1:{% endif %}6379:6379"
-      - "{{ langfuse_minio_api_port }}:9000"
-      - "{% if langfuse_bind_localhost %}127.0.0.1:{% endif %}{{ langfuse_minio_console_port }}:9001"
+      - "{{ langfuse_minio_api_port }}:9100"
+      - "{% if langfuse_bind_localhost %}127.0.0.1:{% endif %}{{ langfuse_minio_console_port }}:9101"
   tags: ["langfuse", "podman", "pod"]
 
 # -- Infrastructure containers --
@@ -127,13 +127,13 @@
     entrypoint: sh
     command:
       - "-c"
-      - "mkdir -p /data/{{ langfuse_s3_event_upload_bucket }} && minio server --address ':9000' --console-address ':9001' /data"
+      - "mkdir -p /data/{{ langfuse_s3_event_upload_bucket }} && minio server --address ':9100' --console-address ':9101' /data"
     env:
       MINIO_ROOT_USER: "{{ langfuse_minio_root_user }}"
       MINIO_ROOT_PASSWORD: "{{ langfuse_minio_root_password }}"
     volumes:
       - "{{ langfuse_project_name }}_minio_data:/data"
-    healthcheck: "mc ready local"
+    healthcheck: "sh -c 'mc alias set local http://localhost:9100 {{ langfuse_minio_root_user }} {{ langfuse_minio_root_password }} 2>/dev/null; mc ready local'"
     healthcheck_interval: 1s
     healthcheck_timeout: 5s
     healthcheck_retries: 5
@@ -168,7 +168,7 @@
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: "{{ langfuse_minio_root_user }}"
       LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: "{{ langfuse_minio_root_password }}"
-      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: "http://localhost:9000"
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: "http://localhost:9100"
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_EVENT_UPLOAD_PREFIX: "events/"
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: "{{ langfuse_s3_media_upload_bucket }}"
@@ -184,7 +184,7 @@
       LANGFUSE_S3_BATCH_EXPORT_BUCKET: "{{ langfuse_s3_batch_export_bucket }}"
       LANGFUSE_S3_BATCH_EXPORT_PREFIX: "exports/"
       LANGFUSE_S3_BATCH_EXPORT_REGION: auto
-      LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: "http://localhost:9000"
+      LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: "http://localhost:9100"
       LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT: "http://localhost:{{ langfuse_minio_api_port }}"
       LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: "{{ langfuse_minio_root_user }}"
       LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: "{{ langfuse_minio_root_password }}"
@@ -222,7 +222,7 @@
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: "{{ langfuse_minio_root_user }}"
       LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: "{{ langfuse_minio_root_password }}"
-      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: "http://localhost:9000"
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: "http://localhost:9100"
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_EVENT_UPLOAD_PREFIX: "events/"
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: "{{ langfuse_s3_media_upload_bucket }}"
@@ -230,7 +230,7 @@
       LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: "{{ langfuse_minio_root_user }}"
       LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: "{{ langfuse_minio_root_password }}"
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: "http://localhost:{{ langfuse_minio_api_port }}"
-      LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: "http://localhost:9000"
+      LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: "http://localhost:9100"
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: "media/"
       LANGFUSE_OBSERVATION_FIELD_OVERFLOW_ENABLED: "false"
@@ -239,7 +239,7 @@
       LANGFUSE_S3_BATCH_EXPORT_BUCKET: "{{ langfuse_s3_batch_export_bucket }}"
       LANGFUSE_S3_BATCH_EXPORT_PREFIX: "exports/"
       LANGFUSE_S3_BATCH_EXPORT_REGION: auto
-      LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: "http://localhost:9000"
+      LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: "http://localhost:9100"
       LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT: "http://localhost:{{ langfuse_minio_api_port }}"
       LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: "{{ langfuse_minio_root_user }}"
       LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: "{{ langfuse_minio_root_password }}"
