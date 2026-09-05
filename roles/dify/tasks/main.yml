@@ -1,0 +1,6 @@
+---
+# tasks file for b08x.llmops.dify
+
+- name: Display the value of dify_my_variable
+  ansible.builtin.debug:
+    msg: "The value of dify_my_variable is {{ dify_my_variable }}"
