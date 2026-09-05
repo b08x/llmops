@@ -214,6 +214,7 @@
           LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: "{{ langfuse_minio_root_user }}"
           LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: "{{ langfuse_minio_root_password }}"
           LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE: "true"
+          LANGFUSE_MIGRATION_V4_WRITE_MODE: "dual"
           REDIS_HOST: localhost
           REDIS_PORT: "6379"
           REDIS_AUTH: "{{ langfuse_redis_auth }}"
@@ -270,6 +271,7 @@
           LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: "{{ langfuse_minio_root_user }}"
           LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: "{{ langfuse_minio_root_password }}"
           LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE: "true"
+          LANGFUSE_MIGRATION_V4_WRITE_MODE: "dual"
           REDIS_HOST: localhost
           REDIS_PORT: "6379"
           REDIS_AUTH: "{{ langfuse_redis_auth }}"

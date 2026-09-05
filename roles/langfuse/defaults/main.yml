@@ -11,7 +11,7 @@ langfuse_deploy_dir: "{{ user.home | default('/opt') }}/langfuse"
 langfuse_project_name: langfuse
 
 # Image tags
-langfuse_image_tag: "4"
+langfuse_image_tag: "latest"
 langfuse_clickhouse_image_tag: "25.12"
 langfuse_postgres_version: "17"
 
