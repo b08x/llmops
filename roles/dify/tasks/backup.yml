@@ -1,0 +1,112 @@
+---
+# Backup/restore tasks for b08x.llmops.dify PostgreSQL database
+# Uses the container CLI (docker or podman) to exec pg_dump/pg_restore
+# inside the postgres container — no host-side postgresql-client required.
+
+- name: Set container CLI for backup operations
+  ansible.builtin.set_fact:
+    dify_backup_cli: "{{ 'docker' if dify_container_runtime == 'docker' else 'podman' }}"
+    dify_backup_container: "{{ dify_project_name }}-db_postgres-1"
+  tags: ["dify", "backup"]
+
+# -- Backup --
+
+- name: Backup Dify PostgreSQL
+  block:
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: "{{ dify_backup_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Set backup filename with timestamp
+      ansible.builtin.set_fact:
+        dify_backup_filename: >-
+          {{ dify_db_database }}_{{ ansible_date_time.iso8601_basic_short }}.{{ 'dump' if dify_backup_format == 'custom' else 'sql' }}
+
+    - name: Backup PostgreSQL database (custom format)
+      ansible.builtin.shell: |
+        {{ dify_backup_cli }} exec {{ dify_backup_container }} \
+          pg_dump -U {{ dify_db_username }} -d {{ dify_db_database }} \
+          -Fc -Z{{ dify_backup_compression }} > {{ dify_backup_dir }}/{{ dify_backup_filename }}
+      args:
+        creates: "{{ dify_backup_dir }}/{{ dify_backup_filename }}"
+      register: dify_backup_result
+      when: dify_backup_format == "custom"
+
+    - name: Backup PostgreSQL database (plain SQL)
+      ansible.builtin.shell: |
+        {{ dify_backup_cli }} exec {{ dify_backup_container }} \
+          pg_dump -U {{ dify_db_username }} -d {{ dify_db_database }} \
+          -Fp > {{ dify_backup_dir }}/{{ dify_backup_filename }}
+      args:
+        creates: "{{ dify_backup_dir }}/{{ dify_backup_filename }}"
+      register: dify_backup_result
+      when: dify_backup_format == "plain"
+
+    - name: Display backup result
+      ansible.builtin.debug:
+        msg: "Backup written to {{ dify_backup_dir }}/{{ dify_backup_filename }}"
+      when: dify_backup_result is defined and dify_backup_result.changed
+
+    - name: Prune old backups
+      ansible.builtin.find:
+        paths: "{{ dify_backup_dir }}"
+        patterns: "{{ dify_db_database }}_*.{dump,sql}"
+        age: "{{ dify_backup_retention_days }}d"
+      register: dify_old_backups
+      changed_when: false
+
+    - name: Remove old backups
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ dify_old_backups.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+      when: dify_old_backups.files | length > 0
+  when: dify_backup_action == "backup"
+  tags: ["dify", "backup"]
+
+# -- Restore --
+
+- name: Restore Dify PostgreSQL
+  block:
+    - name: Verify restore file exists
+      ansible.builtin.stat:
+        path: "{{ dify_backup_file }}"
+      register: dify_restore_file_stat
+
+    - name: Fail if restore file is missing
+      ansible.builtin.fail:
+        msg: "Restore file not found: {{ dify_backup_file }}"
+      when: not dify_restore_file_stat.stat.exists
+
+    - name: Restore PostgreSQL database (custom format)
+      ansible.builtin.shell: |
+        {{ dify_backup_cli }} exec -i {{ dify_backup_container }} \
+          pg_restore -U {{ dify_db_username }} -d {{ dify_db_database }} \
+          --clean --if-exists < {{ dify_backup_file }}
+      register: dify_restore_result
+      changed_when: false
+      when:
+        - dify_restore_file_stat.stat.exists
+        - dify_backup_file | regex_search('\.dump$')
+
+    - name: Restore PostgreSQL database (plain SQL)
+      ansible.builtin.shell: |
+        {{ dify_backup_cli }} exec -i {{ dify_backup_container }} \
+          psql -U {{ dify_db_username }} -d {{ dify_db_database }} \
+          < {{ dify_backup_file }}
+      register: dify_restore_result
+      changed_when: false
+      when:
+        - dify_restore_file_stat.stat.exists
+        - dify_backup_file | regex_search('\.sql$')
+
+    - name: Display restore result
+      ansible.builtin.debug:
+        msg: "Restored from {{ dify_backup_file }}"
+      when: dify_restore_result is defined and dify_restore_result.changed
+  when: dify_backup_action == "restore"
+  tags: ["dify", "backup"]

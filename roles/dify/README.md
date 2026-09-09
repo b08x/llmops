@@ -1,78 +1,166 @@
 # b08x.llmops dify Role
 
-A brief description of the role goes here.
+Deploy self-hosted [Dify](https://dify.ai) — an open-source LLM application
+platform — via Docker Compose or Podman Compose.
 
 ## Requirements
 
-Any pre-requisites that may not be covered by Ansible itself or the role should be mentioned here. For instance, if the role uses the EC2 module, it may be a good idea to mention in this section that the boto package is required.
+- Docker or Podman installed on the target host
+- `community.docker` collection (for Docker Compose deployments)
+- `ansible.posix` collection (for firewalld management)
 
 ## Role Variables
 
-A description of the settable variables for this role should go here, including any variables that are in defaults/main.yml, vars/main.yml, and any variables that can/should be set via parameters to the role. Any variables that are read from other roles and/or the global scope (ie. hostvars, group vars, etc.) should be mentioned here as well.
+All variables are defined in `defaults/main.yml` and use the `dify_` prefix
+(Tier 2 role scope). The `user.home` variable is consumed from `group_vars`
+(Tier 1 host scope).
+
+### Core
+
+| Variable | Default | Description |
+|---|---|---|
+| `dify_container_runtime` | `docker` | Container runtime: `docker` or `podman` |
+| `dify_deploy_dir` | `{{ user.home }}/dify` | Deployment directory for compose files and data |
+| `dify_project_name` | `dify` | Docker Compose project name |
+| `dify_image_tag` | `1.17.0` | Dify API, web, and agent image tag |
+| `dify_bind_localhost` | `true` | Bind ports to 127.0.0.1 only |
+| `dify_force_recreate` | `false` | Force container recreation on every run |
+
+### Ports and Firewall
+
+| Variable | Default | Description |
+|---|---|---|
+| `dify_nginx_port` | `80` | Host port for Nginx HTTP |
+| `dify_nginx_ssl_port` | `443` | Host port for Nginx HTTPS |
+| `dify_plugin_debugging_port` | `5003` | Host port for plugin debugging |
+| `dify_firewall_ports` | `[nginx ports]` | Firewall ports to open when `dify_bind_localhost` is false |
+
+### Database and Redis
+
+| Variable | Default | Description |
+|---|---|---|
+| `dify_db_username` | `postgres` | PostgreSQL user |
+| `dify_db_password` | `difyai123456` | PostgreSQL password |
+| `dify_db_database` | `dify` | PostgreSQL database name |
+| `dify_db_plugin_database` | `dify_plugin` | Plugin daemon database name |
+| `dify_redis_password` | `difyai123456` | Redis password |
+
+### Security
+
+| Variable | Default | Description |
+|---|---|---|
+| `dify_secret_key` | `""` | Leave empty to auto-generate |
+| `dify_init_password` | `""` | Initial admin password |
+| `dify_sandbox_api_key` | `dify-sandbox` | Sandbox API key |
+| `dify_plugin_daemon_key` | (see defaults) | Plugin daemon server key |
+| `dify_agent_api_token` | (see defaults) | Agent backend API token |
+
+### Vector Store
+
+| Variable | Default | Description |
+|---|---|---|
+| `dify_vector_store` | `weaviate` | Vector store backend |
+| `dify_weaviate_api_key` | (see defaults) | Weaviate API key |
+
+### Backup/Restore
+
+| Variable | Default | Description |
+|---|---|---|
+| `dify_backup_action` | `none` | `none`, `backup`, or `restore` |
+| `dify_backup_dir` | `{{ dify_deploy_dir }}/backups` | Backup directory |
+| `dify_backup_file` | `""` | Restore file path (for restore) |
+| `dify_backup_format` | `custom` | `custom` (-Fc) or `plain` (-Fp) |
+| `dify_backup_retention_days` | `7` | Days to retain backups |
 
 ## Dependencies
 
-A list of other roles hosted on Galaxy should go here, plus any details in regards to parameters that may need to be set for other roles, or variables that are used from other roles.
+No role dependencies.
 
 ## Example Playbook
 
-Including an example of how to use your role (for instance, with variables passed in as parameters) is always nice for users too:
+### Docker Compose
 
 ```yaml
-- name: Execute tasks on servers
-  hosts: servers
+- name: Deploy Dify
+  hosts: workstations
+  become: false
+  vars:
+    dify_deploy_dir: "{{ user.home }}/LLMOS/dify"
   roles:
-    - role: b08x.llmops.run
-      run_x: 42
+    - role: b08x.llmops.dify
+      tags: ["dify", "llmops"]
 ```
 
-Another way to consume this role would be:
+### Podman
 
 ```yaml
-- name: Initialize the run role from b08x.llmops
-  hosts: servers
-  gather_facts: false
-  tasks:
-    - name: Trigger invocation of run role
-      ansible.builtin.include_role:
-        name: b08x.llmops.run
-      vars:
-        run_x: 42
+- name: Deploy Dify (Podman) on tinybot
+  hosts: tinybot
+  become: false
+  gather_facts: true
+  vars:
+    dify_container_runtime: podman
+    dify_deploy_dir: "{{ user.home }}/LLMOS/dify"
+    dify_bind_localhost: false
+  roles:
+    - role: b08x.llmops.dify
+      tags: ["dify", "llmops"]
 ```
+
+## Architecture
+
+```
+dify role
+  tasks/main.yml
+    debug entry → verify runtime → create dirs → render .env
+    include docker.yml  (when runtime == docker)
+      render docker-compose.yml.j2 → docker compose pull → docker_compose_v2
+    include podman.yml   (when runtime == podman)
+      render docker-compose.yml.j2 → podman compose down → pull → up -d
+    firewalld (when bind_localhost == false)
+    include backup.yml   (when backup_action != none)
+  handlers/main.yml
+    Restart Dify stack (docker_compose_v2 recreate, docker-only)
+```
+
+Services deployed:
+- nginx (entry point, ports 80/443)
+- api (Dify API server)
+- api_websocket (workflow collaboration, optional via profile)
+- worker (Celery worker)
+- worker_beat (Celery beat scheduler)
+- web (frontend)
+- db_postgres (PostgreSQL 15)
+- redis (Redis 6)
+- sandbox (code execution)
+- plugin_daemon (plugin management)
+- agent_backend (agent runtime backend)
+- local_sandbox (agent shell workspaces)
+- ssrf_proxy (Squid SSRF proxy for sandbox)
+- agent_ssrf_proxy (Squid SSRF proxy for agent sandbox)
+- weaviate (vector store, default)
 
 ## Role Idempotency
 
-Designation of the role as idempotent (True/False)
+True — the role is idempotent. Docker Compose `state: present` and
+`podman compose up -d` are no-ops when containers are already running
+with the current configuration.
 
 ## Role Atomicity
 
-Designation of the role as atomic if applicable (True/False)
+True — the role deploys the complete Dify stack in a single pass.
 
 ## Roll-back capabilities
 
-Define the roll-back capabilities of the role
-
-## Argument Specification
-
-Including an example of how to add an argument Specification file that validates the arguments provided to the role.
-
-```yaml
-argument_specs:
-  main:
-    short_description: Role description.
-    options:
-      string_arg1:
-        description: string argument description.
-        type: "str"
-        default: "x"
-        choices: ["x", "y"]
-```
+Set `dify_force_recreate: false` (default) and revert the variable
+changes. The compose stack will converge to the previous state on next
+run. For full teardown, run `docker compose down` or `podman compose down`
+in the deploy directory.
 
 ## License
 
-<!-- TO-DO: Update the license to the one you want to use (delete this line after setting the license) -->
-BSD
+GPL-2.0-or-later
 
 ## Author Information
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+b08x
