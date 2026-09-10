@@ -43,6 +43,7 @@
     - volumes/sandbox/conf
     - volumes/plugin_daemon
     - volumes/weaviate
+    - volumes/pgvector/data
     - volumes/certbot/conf
     - volumes/certbot/www
   tags: ["dify", "config"]

@@ -13,6 +13,7 @@ dify_redis_image: "docker.io/redis:{{ dify_redis_version }}"
 dify_nginx_image: "docker.io/nginx:latest"
 dify_squid_image: "docker.io/ubuntu/squid:latest"
 dify_weaviate_image: "cr.weaviate.io/semitechnologies/weaviate:{{ dify_weaviate_image_tag }}"
+dify_pgvector_image: "pgvector/pgvector:{{ dify_pgvector_image_tag }}"
 dify_busybox_image: "docker.io/busybox:latest"
 
 # Compose file paths

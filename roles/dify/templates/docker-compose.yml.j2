@@ -372,6 +372,27 @@ services:
       AUTHORIZATION_ADMINLIST_USERS: hello@dify.ai
       DISABLE_TELEMETRY: false
 
+  # pgvector vector store
+  pgvector:
+    image: {{ dify_pgvector_image }}
+    profiles:
+      - pgvector
+    restart: always
+    environment:
+      PGUSER: ${PGVECTOR_PGUSER:-postgres}
+      POSTGRES_PASSWORD: ${PGVECTOR_POSTGRES_PASSWORD:-difyai123456}
+      POSTGRES_DB: ${PGVECTOR_POSTGRES_DB:-dify}
+      PGDATA: ${PGVECTOR_PGDATA:-/var/lib/postgresql/data/pgdata}
+      PG_BIGM: ${PGVECTOR_PG_BIGM:-false}
+      PG_BIGM_VERSION: ${PGVECTOR_PG_BIGM_VERSION:-1.2-20240606}
+    volumes:
+      - ./volumes/pgvector/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
 networks:
   ssrf_proxy_network:
     driver: bridge

@@ -70,9 +70,23 @@ dify_plugin_dify_inner_api_key: "QaHbTe77CtuXmsfyhR7+vRjI/+XbV1AaFy691iy+kGDv2Jv
 dify_agent_api_token: "dify-agent-run-token-for-dev-only"
 dify_agent_server_secret_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY"
 
-# Vector store (weaviate is the default)
+# Vector store (weaviate is the default; alternatives: pgvector)
 dify_vector_store: weaviate
 dify_weaviate_api_key: "WVF5YThaHlkYwhGUSmCRgsX3tD5ngdN8pkih"
+
+# pgvector vector store configuration
+# Uses a separate PostgreSQL container with the pgvector extension (pgvector/pgvector:pg16)
+dify_pgvector_image_tag: "pg16"
+dify_pgvector_host: pgvector
+dify_pgvector_port: 5432
+dify_pgvector_user: postgres
+dify_pgvector_password: difyai123456
+dify_pgvector_database: dify
+dify_pgvector_pgdata: /var/lib/postgresql/data/pgdata
+dify_pgvector_min_connection: 1
+dify_pgvector_max_connection: 5
+dify_pgvector_pg_bigm: false
+dify_pgvector_pg_bigm_version: "1.2-20240606"
 
 # Enable collaboration mode (websocket service)
 dify_enable_collaboration_mode: true

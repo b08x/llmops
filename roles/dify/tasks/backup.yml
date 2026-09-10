@@ -18,6 +18,7 @@
       - volumes/app/storage
       - volumes/redis/data
       - volumes/weaviate
+      - volumes/pgvector/data
       - volumes/plugin_daemon
       - volumes/sandbox/dependencies
       - volumes/sandbox/conf
