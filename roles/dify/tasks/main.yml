@@ -47,6 +47,14 @@
     - volumes/certbot/www
   tags: ["dify", "config"]
 
+- name: Deploy sandbox config
+  ansible.builtin.copy:
+    src: sandbox/config.yaml
+    dest: "{{ dify_deploy_dir }}/volumes/sandbox/conf/config.yaml"
+    mode: "0644"
+  notify: Restart Dify stack
+  tags: ["dify", "config"]
+
 - name: Deploy environment file
   ansible.builtin.template:
     src: env.j2
