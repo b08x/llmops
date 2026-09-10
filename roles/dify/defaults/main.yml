@@ -88,8 +88,12 @@ dify_ssrf_proxy_allow_private_ips: ""
 # Set dify_backup_action to "backup" or "restore" to trigger those operations
 dify_backup_action: "none"
 dify_backup_dir: "{{ dify_deploy_dir }}/backups"
-# For restore: absolute path to the .dump file to restore from
+# For restore: absolute path to the .dump or .sql file to restore from
 dify_backup_file: ""
+# Include volume data (app storage, weaviate, plugin daemon, sandbox, certs, configs)
+dify_backup_include_volumes: true
+# For restore: absolute path to the volume tarball to restore from
+dify_backup_volume_file: ""
 # pg_dump format: "custom" (-Fc, compressed, pg_restore) or "plain" (-Fp, SQL text, psql)
 dify_backup_format: "custom"
 # Compression level 0-9 (only used with custom format)

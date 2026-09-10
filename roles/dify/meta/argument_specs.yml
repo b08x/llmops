@@ -181,6 +181,16 @@ argument_specs:
         type: str
         description: For restore, absolute path to the .dump or .sql file to restore from.
         default: ""
+      dify_backup_include_volumes:
+        type: bool
+        description: >-
+          Include volume data (app storage, weaviate, plugin daemon, sandbox,
+          certs, nginx and ssrf_proxy configs) in backup and restore operations.
+        default: true
+      dify_backup_volume_file:
+        type: str
+        description: For restore, absolute path to the volume tarball to restore from.
+        default: ""
       dify_backup_format:
         type: str
         description: pg_dump format (custom uses -Fc/pg_restore, plain uses -Fp/psql).

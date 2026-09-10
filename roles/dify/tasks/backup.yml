@@ -1,5 +1,7 @@
 ---
-# Backup/restore tasks for b08x.llmops.dify PostgreSQL database
+# Backup/restore tasks for b08x.llmops.dify
+# Backs up and restores both the PostgreSQL database and the Dify volume
+# data (app storage, weaviate, plugin daemon, sandbox, certs, configs).
 # Uses the container CLI (docker or podman) to exec pg_dump/pg_restore
 # inside the postgres container — no host-side postgresql-client required.
 
@@ -9,9 +11,28 @@
     dify_backup_container: "{{ dify_project_name }}-db_postgres-1"
   tags: ["dify", "backup"]
 
+# Paths inside dify_deploy_dir included in the volume tarball.
+- name: Set volume backup path list
+  ansible.builtin.set_fact:
+    dify_backup_volume_paths:
+      - volumes/app/storage
+      - volumes/redis/data
+      - volumes/weaviate
+      - volumes/plugin_daemon
+      - volumes/sandbox/dependencies
+      - volumes/sandbox/conf
+      - volumes/certbot/conf
+      - volumes/certbot/www
+      - ssrf_proxy
+      - nginx
+    dify_backup_config_files:
+      - docker-compose.yml
+      - .env
+  tags: ["dify", "backup"]
+
 # -- Backup --
 
-- name: Backup Dify PostgreSQL
+- name: Backup Dify
   block:
     - name: Create backup directory
       ansible.builtin.file:
@@ -19,10 +40,12 @@
         state: directory
         mode: "0755"
 
-    - name: Set backup filename with timestamp
+    - name: Set backup filenames with timestamp
       ansible.builtin.set_fact:
         dify_backup_filename: >-
           {{ dify_db_database }}_{{ ansible_date_time.iso8601_basic_short }}.{{ 'dump' if dify_backup_format == 'custom' else 'sql' }}
+        dify_backup_volume_filename: >-
+          dify_volumes_{{ ansible_date_time.iso8601_basic_short }}.tar.gz
 
     - name: Backup PostgreSQL database (custom format)
       ansible.builtin.shell: |
@@ -31,7 +54,7 @@
           -Fc -Z{{ dify_backup_compression }} > {{ dify_backup_dir }}/{{ dify_backup_filename }}
       args:
         creates: "{{ dify_backup_dir }}/{{ dify_backup_filename }}"
-      register: dify_backup_result
+      register: dify_backup_db_result
       when: dify_backup_format == "custom"
 
     - name: Backup PostgreSQL database (plain SQL)
@@ -41,55 +64,147 @@
           -Fp > {{ dify_backup_dir }}/{{ dify_backup_filename }}
       args:
         creates: "{{ dify_backup_dir }}/{{ dify_backup_filename }}"
-      register: dify_backup_result
+      register: dify_backup_db_result
       when: dify_backup_format == "plain"
 
-    - name: Display backup result
+    - name: Display database backup result
       ansible.builtin.debug:
-        msg: "Backup written to {{ dify_backup_dir }}/{{ dify_backup_filename }}"
-      when: dify_backup_result is defined and dify_backup_result.changed
+        msg: "Database backup written to {{ dify_backup_dir }}/{{ dify_backup_filename }}"
+      when: dify_backup_db_result is defined and dify_backup_db_result.changed
 
-    - name: Prune old backups
+    - name: Backup volume data and configs
+      ansible.builtin.shell: |
+        tar -czf {{ dify_backup_dir }}/{{ dify_backup_volume_filename }} \
+          {% for path in dify_backup_volume_paths %}-C {{ dify_deploy_dir }} {{ path }} {% endfor %}\
+          {% for file in dify_backup_config_files %}-C {{ dify_deploy_dir }} {{ file }} {% endfor %}
+      args:
+        creates: "{{ dify_backup_dir }}/{{ dify_backup_volume_filename }}"
+      register: dify_backup_volume_result
+      when: dify_backup_include_volumes | bool
+
+    - name: Display volume backup result
+      ansible.builtin.debug:
+        msg: "Volume backup written to {{ dify_backup_dir }}/{{ dify_backup_volume_filename }}"
+      when:
+        - dify_backup_include_volumes | bool
+        - dify_backup_volume_result is defined
+        - dify_backup_volume_result.changed
+
+    - name: Find old database backups
       ansible.builtin.find:
         paths: "{{ dify_backup_dir }}"
         patterns: "{{ dify_db_database }}_*.{dump,sql}"
         age: "{{ dify_backup_retention_days }}d"
-      register: dify_old_backups
+      register: dify_old_db_backups
+      changed_when: false
+
+    - name: Find old volume backups
+      ansible.builtin.find:
+        paths: "{{ dify_backup_dir }}"
+        patterns: "dify_volumes_*.tar.gz"
+        age: "{{ dify_backup_retention_days }}d"
+      register: dify_old_volume_backups
       changed_when: false
 
     - name: Remove old backups
       ansible.builtin.file:
         path: "{{ item.path }}"
         state: absent
-      loop: "{{ dify_old_backups.files }}"
+      loop: "{{ dify_old_db_backups.files + dify_old_volume_backups.files }}"
       loop_control:
         label: "{{ item.path }}"
-      when: dify_old_backups.files | length > 0
+      when: (dify_old_db_backups.files + dify_old_volume_backups.files) | length > 0
   when: dify_backup_action == "backup"
   tags: ["dify", "backup"]
 
 # -- Restore --
 
-- name: Restore Dify PostgreSQL
+- name: Restore Dify
   block:
-    - name: Verify restore file exists
+    - name: Verify database restore file exists
       ansible.builtin.stat:
         path: "{{ dify_backup_file }}"
       register: dify_restore_file_stat
+      when: dify_backup_file | length > 0
 
-    - name: Fail if restore file is missing
+    - name: Fail if database restore file is missing
       ansible.builtin.fail:
-        msg: "Restore file not found: {{ dify_backup_file }}"
-      when: not dify_restore_file_stat.stat.exists
+        msg: "Database restore file not found: {{ dify_backup_file }}"
+      when:
+        - dify_backup_file | length > 0
+        - not dify_restore_file_stat.stat.exists
+
+    - name: Verify volume restore file exists
+      ansible.builtin.stat:
+        path: "{{ dify_backup_volume_file }}"
+      register: dify_restore_volume_stat
+      when:
+        - dify_backup_include_volumes | bool
+        - dify_backup_volume_file | length > 0
+
+    - name: Fail if volume restore file is missing
+      ansible.builtin.fail:
+        msg: "Volume restore file not found: {{ dify_backup_volume_file }}"
+      when:
+        - dify_backup_include_volumes | bool
+        - dify_backup_volume_file | length > 0
+        - not dify_restore_volume_stat.stat.exists
+
+    - name: Stop Dify stack before volume restore
+      ansible.builtin.command:
+        cmd: >-
+          {{ dify_container_runtime }} compose -f {{ dify_compose_file }}
+          --env-file {{ dify_env_file }} down
+      changed_when: false
+      failed_when: false
+      when:
+        - dify_backup_include_volumes | bool
+        - dify_backup_volume_file | length > 0
+        - dify_restore_volume_stat.stat.exists
+
+    - name: Restore volume data and configs
+      ansible.builtin.shell: |
+        tar -xzf {{ dify_backup_volume_file }} -C {{ dify_deploy_dir }}
+      register: dify_restore_volume_result
+      changed_when: false
+      when:
+        - dify_backup_include_volumes | bool
+        - dify_backup_volume_file | length > 0
+        - dify_restore_volume_stat.stat.exists
+
+    - name: Start Dify stack after volume restore
+      ansible.builtin.command:
+        cmd: >-
+          {{ dify_container_runtime }} compose -f {{ dify_compose_file }}
+          --env-file {{ dify_env_file }} up -d
+      changed_when: false
+      when:
+        - dify_backup_include_volumes | bool
+        - dify_backup_volume_file | length > 0
+        - dify_restore_volume_stat.stat.exists
+
+    - name: Wait for PostgreSQL to be ready
+      ansible.builtin.shell: |
+        {{ dify_backup_cli }} exec {{ dify_backup_container }} \
+          pg_isready -U {{ dify_db_username }} -d {{ dify_db_database }}
+      register: dify_pg_ready
+      retries: 10
+      delay: 3
+      until: dify_pg_ready.rc == 0
+      changed_when: false
+      when:
+        - dify_backup_file | length > 0
+        - dify_restore_file_stat.stat.exists
 
     - name: Restore PostgreSQL database (custom format)
       ansible.builtin.shell: |
         {{ dify_backup_cli }} exec -i {{ dify_backup_container }} \
           pg_restore -U {{ dify_db_username }} -d {{ dify_db_database }} \
           --clean --if-exists < {{ dify_backup_file }}
-      register: dify_restore_result
+      register: dify_restore_db_result
       changed_when: false
       when:
+        - dify_backup_file | length > 0
         - dify_restore_file_stat.stat.exists
         - dify_backup_file | regex_search('\.dump$')
 
@@ -98,15 +213,20 @@
         {{ dify_backup_cli }} exec -i {{ dify_backup_container }} \
           psql -U {{ dify_db_username }} -d {{ dify_db_database }} \
           < {{ dify_backup_file }}
-      register: dify_restore_result
+      register: dify_restore_db_result
       changed_when: false
       when:
+        - dify_backup_file | length > 0
         - dify_restore_file_stat.stat.exists
         - dify_backup_file | regex_search('\.sql$')
 
-    - name: Display restore result
+    - name: Display restore results
       ansible.builtin.debug:
-        msg: "Restored from {{ dify_backup_file }}"
-      when: dify_restore_result is defined and dify_restore_result.changed
+        msg: >-
+          Restored
+          {% if dify_backup_file | length > 0 %}database from {{ dify_backup_file }}{% endif %}
+          {% if dify_backup_file | length > 0 and dify_backup_include_volumes | bool and dify_backup_volume_file | length > 0 %} and {% endif %}
+          {% if dify_backup_include_volumes | bool and dify_backup_volume_file | length > 0 %}volumes from {{ dify_backup_volume_file }}{% endif %}
+      when: dify_restore_db_result is defined or dify_restore_volume_result is defined
   when: dify_backup_action == "restore"
   tags: ["dify", "backup"]
