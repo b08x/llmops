@@ -14,6 +14,8 @@
 # -- Backup --
 
 - name: Backup Langfuse PostgreSQL
+  when: langfuse_backup_action == "backup"
+  tags: ["langfuse", "backup"]
   block:
     - name: Create backup directory
       ansible.builtin.file:
@@ -67,12 +69,12 @@
       loop_control:
         label: "{{ item.path }}"
       when: langfuse_old_backups.files | length > 0
-  when: langfuse_backup_action == "backup"
-  tags: ["langfuse", "backup"]
 
 # -- Restore --
 
 - name: Restore Langfuse PostgreSQL
+  when: langfuse_backup_action == "restore"
+  tags: ["langfuse", "backup"]
   block:
     - name: Verify restore file exists
       ansible.builtin.stat:
@@ -110,5 +112,3 @@
       ansible.builtin.debug:
         msg: "Restored from {{ langfuse_backup_file }}"
       when: langfuse_restore_result is defined and langfuse_restore_result.changed
-  when: langfuse_backup_action == "restore"
-  tags: ["langfuse", "backup"]
