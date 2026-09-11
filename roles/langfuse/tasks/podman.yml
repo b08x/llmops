@@ -279,9 +279,17 @@
           LANGFUSE_BULLMQ_SKIP_REDIS_VERSION_CHECK: "false"
       tags: ["langfuse", "podman", "containers"]
   rescue:
-    # TODO (P1, observability) C27: this rescue only debug-prints, so a failed
-    # deployment exits green. Re-raise with ansible.builtin.fail passing
-    # ansible_failed_task, or drop the rescue and let the error surface.
+    # The rescue exists only to attach the operator hint; it re-raises so a
+    # failed deployment fails the play rather than exiting green.
     - name: Report podman deployment failure
       ansible.builtin.debug:
         msg: "Podman deployment failed — check container logs with 'podman logs {{ langfuse_project_name }}-<service>'"
+
+    - name: Fail the play on podman deployment failure
+      ansible.builtin.fail:
+        msg: >-
+          Langfuse podman deployment failed at task
+          '{{ ansible_failed_task.name | default('unknown') }}':
+          {{ ansible_failed_result.msg | default(ansible_failed_result) }}
+          Check container logs with
+          'podman logs {{ langfuse_project_name }}-<service>'.
