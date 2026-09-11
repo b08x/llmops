@@ -18,27 +18,52 @@ All variables are defined in `defaults/main.yml` and use the `dify_` prefix
 ### Core
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `dify_container_runtime` | `docker` | Container runtime: `docker` or `podman` |
 | `dify_deploy_dir` | `{{ user.home }}/dify` | Deployment directory for compose files and data |
 | `dify_project_name` | `dify` | Docker Compose project name |
-| `dify_image_tag` | `1.17.0` | Dify API, web, and agent image tag |
 | `dify_bind_localhost` | `true` | Bind ports to 127.0.0.1 only |
 | `dify_force_recreate` | `false` | Force container recreation on every run |
+| `dify_deploy_env` | `PRODUCTION` | Deployment environment label |
+| `dify_log_level` | `INFO` | Log level for all Dify services |
+| `dify_enable_collaboration_mode` | `true` | Enable WebSocket collaboration (api_websocket service) |
+
+### Image Tags
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `dify_image_tag` | `1.17.0` | Dify API, web, and agent image tag |
+| `dify_sandbox_image_tag` | `0.2.15` | Code execution sandbox image tag |
+| `dify_plugin_daemon_image_tag` | `0.6.10-local` | Plugin daemon image tag |
+| `dify_postgres_version` | `15-alpine` | PostgreSQL image tag |
+| `dify_redis_version` | `6-alpine` | Redis image tag |
 
 ### Ports and Firewall
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `dify_nginx_port` | `80` | Host port for Nginx HTTP |
 | `dify_nginx_ssl_port` | `443` | Host port for Nginx HTTPS |
 | `dify_plugin_debugging_port` | `5003` | Host port for plugin debugging |
 | `dify_firewall_ports` | `[nginx ports]` | Firewall ports to open when `dify_bind_localhost` is false |
 
+### Service URLs
+
+Leave empty to use defaults derived from Nginx ingress. Set these when running
+behind a reverse proxy or on a non-standard setup.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `dify_console_api_url` | `""` | Console API external URL |
+| `dify_console_web_url` | `""` | Console web external URL |
+| `dify_service_api_url` | `""` | Service API external URL |
+| `dify_app_api_url` | `""` | App API external URL |
+| `dify_app_web_url` | `""` | App web external URL |
+
 ### Database and Redis
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `dify_db_username` | `postgres` | PostgreSQL user |
 | `dify_db_password` | `difyai123456` | PostgreSQL password |
 | `dify_db_database` | `dify` | PostgreSQL database name |
@@ -48,12 +73,27 @@ All variables are defined in `defaults/main.yml` and use the `dify_` prefix
 ### Security
 
 | Variable | Default | Description |
-|---|---|---|
-| `dify_secret_key` | `""` | Leave empty to auto-generate |
+| --- | --- | --- |
+| `dify_secret_key` | `""` | Leave empty to auto-generate a persistent key |
 | `dify_init_password` | `""` | Initial admin password |
 | `dify_sandbox_api_key` | `dify-sandbox` | Sandbox API key |
 | `dify_plugin_daemon_key` | (see defaults) | Plugin daemon server key |
+| `dify_plugin_dify_inner_api_key` | (see defaults) | Internal API key for plugin-to-API communication |
 | `dify_agent_api_token` | (see defaults) | Agent backend API token |
+| `dify_agent_server_secret_key` | (see defaults) | Agent server secret key |
+
+### Nginx
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `dify_nginx_server_name` | `_` | Nginx server_name directive |
+| `dify_nginx_https_enabled` | `false` | Enable HTTPS with Let's Encrypt |
+
+### SSRF Proxy
+
+| Variable | Default | Description |
+|---|---|---|
+| `dify_ssrf_proxy_allow_private_ips` | `""` | Allow private IPs in SSRF proxy (set to `1` to enable) |
 
 ### Vector Store
 
@@ -68,7 +108,7 @@ name. The inactive backend's service is defined but not started.
 #### Weaviate (default)
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `dify_weaviate_image_tag` | `1.39.2` | Weaviate image tag |
 | `dify_weaviate_api_key` | (see defaults) | Weaviate API key |
 
@@ -79,7 +119,7 @@ Uses a separate PostgreSQL container with the pgvector extension
 database) — pgvector has its own container, data volume, and credentials.
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `dify_pgvector_image_tag` | `pg16` | pgvector Docker image tag |
 | `dify_pgvector_host` | `pgvector` | pgvector hostname (compose service name) |
 | `dify_pgvector_port` | `5432` | pgvector port |
@@ -95,7 +135,7 @@ database) — pgvector has its own container, data volume, and credentials.
 ### Backup/Restore
 
 | Variable | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `dify_backup_action` | `none` | `none`, `backup`, or `restore` |
 | `dify_backup_dir` | `{{ dify_deploy_dir }}/backups` | Backup directory |
 | `dify_backup_file` | `""` | Restore file path (for restore) |
@@ -163,6 +203,27 @@ No role dependencies.
       tags: ["dify", "llmops"]
 ```
 
+### Production with HTTPS
+
+```yaml
+- name: Deploy Dify (production, HTTPS)
+  hosts: dify-prod
+  become: false
+  gather_facts: true
+  vars:
+    dify_deploy_dir: "/opt/dify"
+    dify_bind_localhost: false
+    dify_nginx_https_enabled: true
+    dify_nginx_server_name: "dify.example.com"
+    dify_init_password: "{{ vault_dify_init_password }}"
+    dify_db_password: "{{ vault_dify_db_password }}"
+    dify_redis_password: "{{ vault_dify_redis_password }}"
+    dify_log_level: WARNING
+  roles:
+    - role: b08x.llmops.dify
+      tags: ["dify", "llmops"]
+```
+
 ## Backup and Restore
 
 The role includes built-in backup and restore for both the PostgreSQL database
@@ -187,9 +248,8 @@ Backups are written to `dify_backup_dir` (default:
 `{{ dify_deploy_dir }}/backups`). Two files are produced:
 
 | File | Description |
-|---|---|
+| --- | --- |
 | `dify_YYYYMMDDThhmmss.dump` | PostgreSQL dump (custom format, `pg_restore` compatible) |
-| `dify_YYYYMMDDThhmmss.sql` | PostgreSQL dump (plain SQL, `psql` compatible) |
 | `dify_volumes_YYYYMMDDThhmmss.tar.gz` | Volume data and config tarball |
 
 ### Restoring Dify
@@ -226,6 +286,24 @@ ansible-playbook dify-docker-ninjabot.yml \
   -e dify_backup_include_volumes=true \
   -e dify_backup_volume_file=/mnt/local_storage/LLMOS/dify/backups/dify_volumes_20250101T120000.tar.gz
 ```
+
+### Volume paths included in backup tarball
+
+| Path | Contents |
+| --- | --- |
+| `volumes/app/storage` | Dify application data (user uploads, files) |
+| `volumes/redis/data` | Redis persistence |
+| `volumes/weaviate` | Weaviate vector store data |
+| `volumes/pgvector/data` | pgvector data |
+| `volumes/plugin_daemon` | Plugin storage |
+| `volumes/sandbox/dependencies` | Code execution dependencies |
+| `volumes/sandbox/conf` | Sandbox config |
+| `volumes/certbot/conf` | Let's Encrypt certificates |
+| `volumes/certbot/www` | ACME challenge files |
+| `ssrf_proxy/` | SSRF proxy configs |
+| `nginx/` | Reverse proxy configs |
+| `docker-compose.yml` | Compose file |
+| `.env` | Environment variables |
 
 ## Updating Dify
 
@@ -297,22 +375,33 @@ dify role
 ```
 
 Services deployed:
-- nginx (entry point, ports 80/443)
-- api (Dify API server)
-- api_websocket (workflow collaboration, optional via profile)
-- worker (Celery worker)
-- worker_beat (Celery beat scheduler)
-- web (frontend)
-- db_postgres (PostgreSQL 15)
-- redis (Redis 6)
-- sandbox (code execution)
-- plugin_daemon (plugin management)
-- agent_backend (agent runtime backend)
-- local_sandbox (agent shell workspaces)
-- ssrf_proxy (Squid SSRF proxy for sandbox)
-- agent_ssrf_proxy (Squid SSRF proxy for agent sandbox)
-- weaviate (vector store, default, via `weaviate` compose profile)
-- pgvector (vector store, via `pgvector` compose profile)
+
+| Service | Description | Port |
+| --- | --- | --- |
+| `nginx` | Reverse proxy entry point | 80, 443 |
+| `api` | Dify API server | 5001 (internal) |
+| `api_websocket` | WebSocket for collaboration (profile-gated) | 5001 (internal) |
+| `worker` | Celery background worker | — |
+| `worker_beat` | Celery beat scheduler | — |
+| `web` | Next.js frontend | — |
+| `db_postgres` | PostgreSQL 15 | 5432 (internal) |
+| `redis` | Redis 6 cache/queue | 6379 (internal) |
+| `sandbox` | Code execution sandbox | 8194 (internal) |
+| `plugin_daemon` | Plugin management daemon | 5002, 5003 |
+| `agent_backend` | Agent runtime backend | 5050 (internal) |
+| `local_sandbox` | Agent shell workspaces | 5004 (internal) |
+| `ssrf_proxy` | Squid SSRF proxy for sandbox | 3128 (internal) |
+| `agent_ssrf_proxy` | Squid SSRF proxy for agent sandbox | 3128 (internal) |
+| `weaviate` | Vector store (default, profile: `weaviate`) | 8080 (internal) |
+| `pgvector` | Vector store (profile: `pgvector`) | 5432 (internal) |
+
+### Networks
+
+| Network | Driver | Purpose |
+| --- | --- | --- |
+| `ssrf_proxy_network` | bridge (internal) | API, worker, sandbox ↔ SSRF proxy |
+| `local_sandbox_proxy_network` | bridge (internal) | Agent sandbox ↔ agent SSRF proxy |
+| `agent_sandbox_network` | bridge (internal) | Agent backend ↔ local sandbox |
 
 ## Role Idempotency
 

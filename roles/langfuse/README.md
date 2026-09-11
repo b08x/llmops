@@ -71,7 +71,7 @@ All variables use the `langfuse_` prefix. Defined in `defaults/main.yml`.
 ### Runtime & Deployment
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `langfuse_container_runtime` | `docker` | Runtime: `docker` or `podman` |
 | `langfuse_deploy_dir` | `{{ user.home }}/langfuse` | Deploy directory for files and data |
 | `langfuse_project_name` | `langfuse` | Compose project name / pod name |
@@ -79,25 +79,34 @@ All variables use the `langfuse_` prefix. Defined in `defaults/main.yml`.
 ### Images
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `langfuse_image_tag` | `4` | Langfuse web/worker image tag |
+| ---------- | --------- | ------------- |
+| `langfuse_image_tag` | `latest` | Langfuse web/worker image tag |
 | `langfuse_clickhouse_image_tag` | `25.12` | ClickHouse server image tag |
 | `langfuse_postgres_version` | `17` | PostgreSQL major version |
 
-### Ports
+### Ports and Firewall
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `langfuse_web_port` | `3000` | Host port for Langfuse web UI |
 | `langfuse_worker_port` | `3030` | Host port for Langfuse worker |
 | `langfuse_minio_api_port` | `9090` | Host port for MinIO S3 API |
 | `langfuse_minio_console_port` | `9091` | Host port for MinIO console |
 | `langfuse_bind_localhost` | `true` | Bind infra ports to 127.0.0.1 only |
+| `langfuse_firewall_ports` | `[web, worker, minio ports]` | Firewall ports to open when `langfuse_bind_localhost` is false |
+| `langfuse_force_recreate` | `false` | Force container recreation on every run |
+
+### Feature Flags
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `langfuse_telemetry_enabled` | `true` | Enable anonymous telemetry |
+| `langfuse_enable_experimental_features` | `false` | Enable experimental features |
 
 ### Secrets
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `langfuse_nextauth_url` | `http://localhost:3000` | Public URL for NextAuth |
 | `langfuse_nextauth_secret` | `mysecret` | NextAuth JWT secret |
 | `langfuse_salt` | `mysalt` | Salt for API key hashing |
@@ -114,7 +123,7 @@ All variables use the `langfuse_` prefix. Defined in `defaults/main.yml`.
 ### Storage
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `langfuse_s3_event_upload_bucket` | `langfuse` | S3 bucket for event uploads |
 | `langfuse_s3_media_upload_bucket` | `langfuse` | S3 bucket for media uploads |
 | `langfuse_s3_batch_export_bucket` | `langfuse` | S3 bucket for batch exports |
@@ -129,13 +138,17 @@ All variables use the `langfuse_` prefix. Defined in `defaults/main.yml`.
 ### Backup/Restore
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `langfuse_backup_action` | `none` | `none`, `backup`, or `restore` |
 | `langfuse_backup_dir` | `{{ langfuse_deploy_dir }}/backups` | Backup directory |
 | `langfuse_backup_file` | `""` | Restore source file (.dump or .sql) |
-| `langfuse_backup_format` | `custom` | `custom` (-Fc) or `plain` (-Fp) |
-| `langfuse_backup_compression` | `6` | Compression level 0-9 (custom only) |
-| `langfuse_backup_retention_days` | `7` | Days to keep before pruning |
+| `langfuse_backup_format` | `custom` | `custom` (-Fc, pg_restore) or `plain` (-Fp, psql) |
+| `langfuse_backup_compression` | `6` | Compression level 0-9 (custom format only) |
+| `langfuse_backup_retention_days` | `7` | Days to retain backups before pruning |
+
+> **Note:** Langfuse backup is PostgreSQL-only. Unlike the Dify role, there is
+> no volume backup — ClickHouse and MinIO data are not included. For full
+> disaster recovery, back up MinIO buckets and ClickHouse data separately.
 
 ## Dependencies
 
@@ -207,7 +220,7 @@ None.
 ## Runtime Comparison
 
 | Aspect | Docker | Podman |
-|--------|--------|--------|
+| -------- | -------- | -------- |
 | Module | `community.docker.docker_compose_v2` | `containers.podman.*` |
 | Network | Service hostnames (e.g. `postgres:5432`) | `localhost` (shared pod namespace) |
 | Stack definition | `docker-compose.yml` template | Individual volume/pod/container tasks |
@@ -233,15 +246,24 @@ and defaults for all 30+ variables.
 
 ## Container Stack
 
-```
-langfuse-web       :3000  → Langfuse web UI (Next.js)
-langfuse-worker    :3030  → Background worker (queue processing)
-postgres           :5432  → Primary database
-clickhouse         :8123  → Analytics store (event ingestion)
-redis              :6379  → Queue backend (BullMQ)
-minio              :9000  → S3-compatible object storage
-                     :9001 → MinIO console
-```
+| Service | Image | Port | Purpose |
+| --------- | ------- | ------ | --------- |
+| `langfuse-web` | `langfuse/langfuse:latest` | 3000 | Web UI (Next.js) |
+| `langfuse-worker` | `langfuse/langfuse:latest` | 3030 | Background worker (BullMQ) |
+| `postgres` | `postgres:17` | 5432 | Primary database |
+| `clickhouse` | `clickhouse/clickhouse-server:25.12` | 8123, 9000 | Analytics store (event ingestion) |
+| `redis` | `redis:7-alpine` | 6379 | Queue backend (BullMQ) |
+| `minio` | `minio/minio:latest` | 9000, 9091 | S3-compatible object storage |
+
+### Named Volumes
+
+| Volume | Purpose |
+| -------- | --------- |
+| `langfuse_postgres_data` | PostgreSQL data |
+| `langfuse_clickhouse_data` | ClickHouse data |
+| `langfuse_clickhouse_logs` | ClickHouse logs |
+| `langfuse_minio_data` | MinIO object storage |
+| `langfuse_redis_data` | Redis persistence |
 
 ## Usage Guide
 
@@ -380,6 +402,20 @@ postgres_20260904T143000.sql   (plain SQL)
 
 Old backups beyond `langfuse_backup_retention_days` (default: 7) are pruned
 automatically.
+
+**What's included:** PostgreSQL database only (traces, users, projects, API keys).
+
+**What's NOT included:** ClickHouse analytics data, MinIO object storage (media,
+event uploads, batch exports). For full disaster recovery, back up these
+separately:
+
+```bash
+# MinIO backup (run on the MinIO host)
+mc mirror minio/langfuse /backup/langfuse-minio/
+
+# ClickHouse backup (run on the ClickHouse host)
+clickhouse-client --query "BACKUP TABLE default TO Disk('backups', 'langfuse-ch')"
+```
 
 ### 6. Restore the Database
 
