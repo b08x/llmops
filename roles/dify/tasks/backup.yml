@@ -8,6 +8,9 @@
 - name: Set container CLI for backup operations
   ansible.builtin.set_fact:
     dify_backup_cli: "{{ 'docker' if dify_container_runtime == 'docker' else 'podman' }}"
+    # TODO (P2, robustness) C25: hardcodes compose's default container naming;
+    # renaming the compose service silently breaks every backup exec. Derive it
+    # from the template, or look it up with `<cli> ps --filter`.
     dify_backup_container: "{{ dify_project_name }}-db_postgres-1"
   tags: ["dify", "backup"]
 

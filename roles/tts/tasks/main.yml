@@ -1,5 +1,9 @@
 ---
 # tasks file for b08x.llmops.whisper
+# TODO (P2, naming) C32: role directory is `tts` but this header and
+# whisper_my_variable say whisper. Settle on one — rename the directory, or
+# rename the vars and argument_specs to tts_*.
+
 
 - name: Display the value of whisper_my_variable
   ansible.builtin.debug:
