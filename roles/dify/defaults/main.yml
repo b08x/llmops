@@ -51,6 +51,9 @@ dify_deploy_env: PRODUCTION
 dify_log_level: INFO
 
 # Database configuration (PostgreSQL)
+# Compose service name of the PostgreSQL container (see templates/docker-compose.yml.j2).
+# Used to look the container up for backup/restore exec.
+dify_db_service_name: db_postgres
 dify_db_username: postgres
 dify_db_password: difyai123456
 dify_db_database: dify

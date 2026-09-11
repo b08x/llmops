@@ -8,10 +8,42 @@
 - name: Set container CLI for backup operations
   ansible.builtin.set_fact:
     dify_backup_cli: "{{ 'docker' if dify_container_runtime == 'docker' else 'podman' }}"
-    # TODO (P2, robustness) C25: hardcodes compose's default container naming;
-    # renaming the compose service silently breaks every backup exec. Derive it
-    # from the template, or look it up with `<cli> ps --filter`.
-    dify_backup_container: "{{ dify_project_name }}-db_postgres-1"
+  tags: ["dify", "backup"]
+
+# Ask the runtime which container belongs to this compose project/service
+# rather than reconstructing compose's default "<project>-<service>-1" name —
+# renaming the service, or a runtime that numbers differently, would otherwise
+# break every exec below. Works for both the docker and podman CLI paths.
+- name: Look up the Dify PostgreSQL container by compose labels
+  ansible.builtin.command:
+    argv:
+      - "{{ dify_backup_cli }}"
+      - ps
+      - "--filter"
+      - "label=com.docker.compose.project={{ dify_project_name }}"
+      - "--filter"
+      - "label=com.docker.compose.service={{ dify_db_service_name }}"
+      - "--format"
+      - "{% raw %}{{.Names}}{% endraw %}"
+  register: dify_backup_container_lookup
+  changed_when: false
+  failed_when: false
+  tags: ["dify", "backup"]
+
+- name: Set the Dify PostgreSQL container name
+  ansible.builtin.set_fact:
+    dify_backup_container: >-
+      {{ (dify_backup_container_lookup.stdout_lines | first)
+         if (dify_backup_container_lookup.stdout_lines | default([]) | length > 0)
+         else (dify_project_name ~ '-' ~ dify_db_service_name ~ '-1') }}
+  tags: ["dify", "backup"]
+
+- name: Report the container the backup will exec into
+  ansible.builtin.debug:
+    msg: >-
+      Using container '{{ dify_backup_container }}'
+      ({{ 'discovered via compose labels' if dify_backup_container_lookup.stdout_lines | default([]) | length > 0
+          else 'falling back to compose default naming — the stack may not be running' }}).
   tags: ["dify", "backup"]
 
 # Paths inside dify_deploy_dir included in the volume tarball.
